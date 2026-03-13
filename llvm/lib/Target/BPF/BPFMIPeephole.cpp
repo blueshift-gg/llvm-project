@@ -396,18 +396,49 @@ bool BPFMIPreEmitPeephole::eliminateRedundantMov() {
 
 bool BPFMIPreEmitPeephole::foldBitTestBranchIntoJSet() {
   bool Changed = false;
+  const TargetRegisterInfo *TRI = MF->getSubtarget().getRegisterInfo();
 
   for (MachineBasicBlock &MBB : *MF) {
-    auto getPrevNonDebugInstr = [&](MachineInstr &MI) -> MachineInstr * {
-      auto It = MI.getIterator();
-      while (It != MBB.begin()) {
+    // Scan back from BrMI to find the AND defining DstReg. We skip over
+    // non-defining instructions between the AND and the branch, but bail
+    // if any of them clobber the AND's source register. Register aliases
+    // (e.g. w1 vs r1) are handled via regsOverlap.
+    auto findAndDefForJSet = [&](MachineInstr &BrMI,
+                                 Register DstReg) -> MachineInstr * {
+      for (auto It = BrMI.getIterator(); It != MBB.begin();) {
         --It;
-        if (!It->isDebugInstr())
-          return &*It;
+        if (It->isDebugInstr())
+          continue;
+        bool DefsDstReg = false;
+        for (const MachineOperand &MO : It->operands()) {
+          if (MO.isReg() && MO.isDef() &&
+              TRI->regsOverlap(MO.getReg(), DstReg)) {
+            DefsDstReg = true;
+            break;
+          }
+        }
+        if (!DefsDstReg)
+          continue;
+        unsigned Opc = It->getOpcode();
+        if (Opc != BPF::AND_rr && Opc != BPF::AND_rr_32 &&
+            Opc != BPF::AND_ri && Opc != BPF::AND_ri_32)
+          return nullptr;
+        if (Opc == BPF::AND_rr || Opc == BPF::AND_rr_32) {
+          Register SrcReg = It->getOperand(2).getReg();
+          for (auto Check = std::next(It);
+               Check != BrMI.getIterator(); ++Check) {
+            if (Check->isDebugInstr())
+              continue;
+            for (const MachineOperand &CMO : Check->operands())
+              if (CMO.isReg() && CMO.isDef() &&
+                  TRI->regsOverlap(CMO.getReg(), SrcReg))
+                return nullptr;
+          }
+        }
+        return &*It;
       }
       return nullptr;
     };
-
     for (auto MII = MBB.begin(), MIE = MBB.end(); MII != MIE;) {
       MachineInstr &BrMI = *MII++;
 
@@ -440,7 +471,7 @@ bool BPFMIPreEmitPeephole::foldBitTestBranchIntoJSet() {
       if (!DstReg.isPhysical() || isPhysRegUsedAfter(DstReg, BrMI.getIterator()))
         continue;
 
-      MachineInstr *AndMI = getPrevNonDebugInstr(BrMI);
+      MachineInstr *AndMI = findAndDefForJSet(BrMI, DstReg);
       if (!AndMI || AndMI->getParent() != &MBB || !AndMI->getOperand(0).isReg() ||
           !AndMI->getOperand(1).isReg())
         continue;

@@ -1,0 +1,28 @@
+# RUN: llc -o - %s -mtriple=bpf -run-pass=bpf-mi-pemit-peephole | FileCheck %s
+#
+# Verify that AND_rr + JNE_ri folds into JSET_rr for the select IR path.
+# The AND should be eliminated and JSET emitted in its place.
+#
+--- |
+  define i64 @select_jset(i64 %0, i64 %1) { ret i64 0 }
+...
+---
+name:            select_jset
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $r1, $r2
+    $r2 = AND_rr killed $r2, killed $r1
+    $r0 = MOV_ri 32
+    JNE_ri killed $r2, 0, %bb.2
+  bb.1:
+    successors: %bb.2
+    $r0 = MOV_ri 64
+  bb.2:
+    liveins: $r0
+    RET implicit $r0
+# CHECK-LABEL: name: select_jset
+# CHECK:       $r0 = MOV_ri 32
+# CHECK-NEXT:  JSET_rr $r2, $r1, %bb.2
+# CHECK-NOT:   AND_rr
