@@ -945,12 +945,12 @@ BPFTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
 
   bool isMemcpyOp = Opc == BPF::MEMCPY;
 
-#ifndef NDEBUG
   bool isSelectRIOp = (Opc == BPF::Select_Ri ||
                        Opc == BPF::Select_Ri_64_32 ||
                        Opc == BPF::Select_Ri_32 ||
                        Opc == BPF::Select_Ri_32_64);
 
+#ifndef NDEBUG
   if (!(isSelectRROp || isSelectRIOp || isMemcpyOp))
     report_fatal_error("unhandled instruction type: " + Twine(Opc));
 #endif
@@ -1016,6 +1016,25 @@ BPFTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
     report_fatal_error("unimplemented select CondCode " + Twine(CC));
   }
 
+  // Fold select(SETEQ, AND(a,b), 0, T, F) into JNE+swapped PHI so the
+  // existing AND+JNE→JSET peephole can eliminate the AND.
+  bool SwapSelectPHI = false;
+  if (CC == ISD::SETEQ && isSelectRIOp && !is32BitCmp) {
+    int64_t CheckImm = MI.getOperand(2).getImm();
+    if (CheckImm == 0) {
+      Register LHSOrig = MI.getOperand(1).getReg();
+      MachineRegisterInfo &MRI = F->getRegInfo();
+      MachineInstr *DefMI = MRI.hasOneDef(LHSOrig)
+                                  ? &*MRI.def_instr_begin(LHSOrig)
+                                  : nullptr;
+      if (DefMI && DefMI->getParent() == BB &&
+          (DefMI->getOpcode() == BPF::AND_rr ||
+           DefMI->getOpcode() == BPF::AND_ri)) {
+        NewCC = BPF::JNE_ri;
+        SwapSelectPHI = true;
+      }
+    }
+  }
   Register LHS = MI.getOperand(1).getReg();
   bool isSignedCmp = (CC == ISD::SETGT ||
                       CC == ISD::SETGE ||
@@ -1061,9 +1080,9 @@ BPFTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   // ...
   BB = Copy1MBB;
   BuildMI(*BB, BB->begin(), DL, TII.get(BPF::PHI), MI.getOperand(0).getReg())
-      .addReg(MI.getOperand(5).getReg())
+      .addReg(MI.getOperand(SwapSelectPHI ? 4 : 5).getReg())
       .addMBB(Copy0MBB)
-      .addReg(MI.getOperand(4).getReg())
+      .addReg(MI.getOperand(SwapSelectPHI ? 5 : 4).getReg())
       .addMBB(ThisMBB);
 
   MI.eraseFromParent(); // The pseudo instruction is gone now.

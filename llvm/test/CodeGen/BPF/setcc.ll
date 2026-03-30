@@ -8,8 +8,18 @@ define i16 @sccweqand(i16 %a, i16 %b) nounwind {
   ret i16 %t3
 }
 ; CHECK-LABEL: sccweqand:
-; CHECK-V1: if r1 == 0
-; CHECK-V2: if r1 == 0
+; CHECK-V1:      r0 = 0
+; CHECK-V1-NEXT: if r1 & 65535 goto [[LABEL_EQ:LBB[0-9]+_[0-9]+]]
+; CHECK-V1-NEXT: # %bb.1:
+; CHECK-V1-NEXT: r0 = 1
+; CHECK-V1-NEXT: [[LABEL_EQ]]:
+; CHECK-V1-NEXT: exit
+; CHECK-V2:      r0 = 0
+; CHECK-V2-NEXT: if r1 & 65535 goto [[LABEL_EQ2:LBB[0-9]+_[0-9]+]]
+; CHECK-V2-NEXT: # %bb.1:
+; CHECK-V2-NEXT: r0 = 1
+; CHECK-V2-NEXT: [[LABEL_EQ2]]:
+; CHECK-V2-NEXT: exit
 
 define i16 @sccwneand(i16 %a, i16 %b) nounwind {
   %t1 = and i16 %a, %b
@@ -18,8 +28,18 @@ define i16 @sccwneand(i16 %a, i16 %b) nounwind {
   ret i16 %t3
 }
 ; CHECK-LABEL: sccwneand:
-; CHECK-V1: if r1 != 0
-; CHECK-V2: if r1 != 0
+; CHECK-V1:      r0 = 1
+; CHECK-V1-NEXT: if r1 & 65535 goto [[LABEL_NE:LBB[0-9]+_[0-9]+]]
+; CHECK-V1-NEXT: # %bb.1:
+; CHECK-V1-NEXT: r0 = 0
+; CHECK-V1-NEXT: [[LABEL_NE]]:
+; CHECK-V1-NEXT: exit
+; CHECK-V2:      r0 = 1
+; CHECK-V2-NEXT: if r1 & 65535 goto [[LABEL_NE2:LBB[0-9]+_[0-9]+]]
+; CHECK-V2-NEXT: # %bb.1:
+; CHECK-V2-NEXT: r0 = 0
+; CHECK-V2-NEXT: [[LABEL_NE2]]:
+; CHECK-V2-NEXT: exit
 
 define i16 @sccwne(i16 %a, i16 %b) nounwind {
   %t1 = icmp ne i16 %a, %b
