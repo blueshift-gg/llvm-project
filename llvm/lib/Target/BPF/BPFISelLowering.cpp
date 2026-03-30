@@ -37,6 +37,11 @@ using namespace llvm;
 static cl::opt<bool> BPFExpandMemcpyInOrder("bpf-expand-memcpy-in-order",
   cl::Hidden, cl::init(false),
   cl::desc("Expand memcpy into load/store pairs in order"));
+static cl::opt<bool> BPFEnableJSet(
+    "bpf-enable-jset", cl::Hidden, cl::init(true),
+    cl::desc("Enable JSET instruction selection and peephole optimizations"));
+
+bool llvm::useBPFJSet() { return BPFEnableJSet; }
 
 static void fail(const SDLoc &DL, SelectionDAG &DAG, const Twine &Msg,
                  SDValue Val = {}) {
@@ -1017,9 +1022,9 @@ BPFTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   }
 
   // Fold select(SETEQ, AND(a,b), 0, T, F) into JNE+swapped PHI so the
-  // existing AND+JNE→JSET peephole can eliminate the AND.
+  // existing AND+JNE→JSET peephole can eliminate the AND when JSET is enabled.
   bool SwapSelectPHI = false;
-  if (CC == ISD::SETEQ && isSelectRIOp && !is32BitCmp) {
+  if (useBPFJSet() && CC == ISD::SETEQ && isSelectRIOp && !is32BitCmp) {
     int64_t CheckImm = MI.getOperand(2).getImm();
     if (CheckImm == 0) {
       Register LHSOrig = MI.getOperand(1).getReg();

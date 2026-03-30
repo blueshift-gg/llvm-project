@@ -1,4 +1,5 @@
-# RUN: llc -o - %s -mtriple=bpf -run-pass=bpf-mi-pemit-peephole | FileCheck %s
+# RUN: llc -o - %s -mtriple=bpf -run-pass=bpf-mi-pemit-peephole | FileCheck --check-prefix=CHECK-ON %s
+# RUN: llc -o - %s -mtriple=bpf -bpf-enable-jset=false -run-pass=bpf-mi-pemit-peephole | FileCheck --check-prefix=CHECK-OFF %s
 #
 # Verify that AND_ri + JNE_ri folds into JSET_ri when the mask is an immediate.
 #
@@ -21,7 +22,11 @@ body:             |
   bb.2:
     liveins: $r0
     RET implicit $r0
-# CHECK-LABEL: name: select_jset_ri
-# CHECK:       $r0 = MOV_ri 32
-# CHECK-NEXT:  JSET_ri $r1, 255, %bb.2
-# CHECK-NOT:   AND_ri
+# CHECK-OFF-LABEL: name: select_jset_ri
+# CHECK-OFF:       $r1 = AND_ri killed $r1, 255
+# CHECK-OFF:       JNE_ri killed $r1, 0, %bb.2
+# CHECK-OFF-NOT:   JSET_ri
+# CHECK-ON-LABEL:  name: select_jset_ri
+# CHECK-ON:        $r0 = MOV_ri 32
+# CHECK-ON-NEXT:   JSET_ri $r1, 255, %bb.2
+# CHECK-ON-NOT:    AND_ri

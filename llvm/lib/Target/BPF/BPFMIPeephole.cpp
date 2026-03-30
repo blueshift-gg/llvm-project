@@ -307,6 +307,7 @@ struct BPFMIPreEmitPeephole : public MachineFunctionPass {
   MachineFunction *MF;
   const TargetRegisterInfo *TRI;
   const BPFInstrInfo *TII;
+  bool EnableJSet;
   bool SupportGotol;
 
   BPFMIPreEmitPeephole() : MachineFunctionPass(ID) {}
@@ -334,7 +335,8 @@ public:
 
     bool Changed;
     Changed = eliminateRedundantMov();
-    Changed |= foldBitTestBranchIntoJSet();
+    if (EnableJSet)
+      Changed |= foldBitTestBranchIntoJSet();
     if (SupportGotol)
       Changed = adjustBranch() || Changed;
     Changed |= insertMissingCallerSavedSpills();
@@ -349,6 +351,7 @@ void BPFMIPreEmitPeephole::initialize(MachineFunction &MFParm) {
   MF = &MFParm;
   TII = MF->getSubtarget<BPFSubtarget>().getInstrInfo();
   TRI = MF->getSubtarget<BPFSubtarget>().getRegisterInfo();
+  EnableJSet = useBPFJSet();
   SupportGotol = MF->getSubtarget<BPFSubtarget>().hasGotol();
   LLVM_DEBUG(dbgs() << "*** BPF PreEmit peephole pass ***\n\n");
 }

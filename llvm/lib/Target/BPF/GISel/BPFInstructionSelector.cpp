@@ -9,6 +9,7 @@
 /// This file implements the targeting of the InstructionSelector class for BPF.
 //===----------------------------------------------------------------------===//
 
+#include "BPF.h"
 #include "BPFInstrInfo.h"
 #include "BPFRegisterBankInfo.h"
 #include "BPFSubtarget.h"

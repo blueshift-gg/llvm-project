@@ -24,6 +24,8 @@ class PassRegistry;
 
 static const char *BPF_TRAP = "__bpf_trap";
 
+bool useBPFJSet();
+
 ModulePass *createBPFCheckAndAdjustIR();
 
 FunctionPass *createBPFISelDag(BPFTargetMachine &TM);
