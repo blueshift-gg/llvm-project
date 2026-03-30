@@ -1,3 +1,4 @@
+
 //===-- BPFSubtarget.cpp - BPF Subtarget Information ----------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
@@ -44,6 +45,7 @@ static cl::opt<bool> Disable_load_acq_store_rel(
     "disable-load-acq-store-rel", cl::Hidden, cl::init(false),
     cl::desc("Disable load-acquire and store-release insns"));
 
+// TODO: add a flag to activate jmp ext and not let it as default
 void BPFSubtarget::anchor() {}
 
 BPFSubtarget &BPFSubtarget::initializeSubtargetDependencies(StringRef CPU,
@@ -74,8 +76,13 @@ void BPFSubtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
     CPU = "v3";
   if (CPU == "probe")
     CPU = sys::detail::getHostCPUNameForBPF();
-  if (CPU == "generic" || CPU == "v1")
+  if (CPU == "generic") {
+    HasJmpExt = true;
     return;
+  }
+  if (CPU == "v1") {
+    return;
+  }  
   if (CPU == "v2") {
     HasJmpExt = true;
     return;
