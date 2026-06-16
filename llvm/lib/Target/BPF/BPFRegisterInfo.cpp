@@ -95,12 +95,16 @@ bool BPFRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     assert(i < MI.getNumOperands() && "Instr doesn't have FrameIndex operand!");
   }
 
-  Register FrameReg = getFrameRegister(MF);
+  // FrameReg is assigned through getFrameRegister in getFrameIndexReference
+  Register FrameReg;
   int FrameIndex = MI.getOperand(i).getIndex();
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
 
+  StackOffset FrameIndexRef =
+      getFrameLowering(MF)->getFrameIndexReference(MF, FrameIndex, FrameReg);
+
   if (MI.getOpcode() == BPF::MOV_rr) {
-    int Offset = MF.getFrameInfo().getObjectOffset(FrameIndex);
+    int Offset = FrameIndexRef.getFixed();
 
     WarnSize(Offset, MF, DL, MBB);
     MI.getOperand(i).ChangeToRegister(FrameReg, false);
@@ -111,8 +115,7 @@ bool BPFRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     return false;
   }
 
-  int Offset = MF.getFrameInfo().getObjectOffset(FrameIndex) +
-               MI.getOperand(i + 1).getImm();
+  int Offset = FrameIndexRef.getFixed() + MI.getOperand(i + 1).getImm();
 
   if (!isInt<32>(Offset))
     llvm_unreachable("bug in frame offset");
